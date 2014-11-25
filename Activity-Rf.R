@@ -15,3 +15,8 @@ data <- read.csv("CAX_ExacerbationModeling_TRAIN_data.csv")
 dim(data) # 4099 x 1332
 sum(is.na(data)) # 182663 - 3.3%
 table(data$Exacebator) # 3756, 343
+
+#### Metadata mapping ####
+metadata <- read.csv("CAX_ExacerbationModeling_MetaData.csv")
+head(metadata)
+table(metadata$Column.Type)
