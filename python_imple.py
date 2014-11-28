@@ -29,15 +29,16 @@ train.columns = data.columns
 evaluation.columns = data.columns
 
 ## Sampling
-train_0 = train[train['Exacebator'] == 0]
-train_1 = train[train['Exacebator'] == 1]
+#train_0 = train[train['Exacebator'] == 0]
+#train_1 = train[train['Exacebator'] == 1]
 
-samp = np.random.choice(train_0.index.values, 343)
-train_0_samp = train_0.ix[samp]
-train = train_1.append(train_0_samp)
+#samp = np.random.choice(train_0.index.values, 343)
+#train_0_samp = train_0.ix[samp]
+#train = train_1.append(train_0_samp)
 
 # Shuffling
-train = train.iloc[np.random.permutation(np.arange(len(train)))]
+#train = train.iloc[np.random.permutation(np.arange(len(train)))]
+
 
 # Ignoring sid variable
 colsToDrop = ['Exacebator','sid']
@@ -50,11 +51,47 @@ X_eval = evaluation.drop(colsToDrop, axis = 1)
 skfold_train = StratifiedKFold(y_train, n_folds = 10)
 
 ## RF classifier
-rf = RandomForestClassifier(n_estimators = 3000, n_jobs = -1, verbose = True)
-scores_rf = cross_val_score(rf, X_train, y_train, scoring = "f1", cv = skfold_train)
+rf = RandomForestClassifier(n_jobs = -1, verbose = True)
+param_grid = { 'n_estimators' : [500,1000,1500,2000,2500,3000],
+              'criterion' : ['gini', 'entropy'],
+                'max_features' : [35,55,75,100],
+                'max_depth' : [4,5,6]
+                }
+gs_cv = GridSearchCV(rf, param_grid, scoring = 'f1', n_jobs = -1, verbose = 2).fit(X_train, y_train)
+gs_cv.best_params_
+
+scores_rf = cross_val_score(rf, X_train, y_train, scoring = "f1", cv = 10)
 print("RF CV Accuracy: %0.3f (+/- %0.3f)" % (scores_rf.mean(), scores_rf.std() * 2))
 
+rf = RandomForestClassifier(max_features= 55, n_estimators= 1500, criterion= 'gini', max_depth= 6, 
+                            n_jobs = -1, verbose = True, oob_score = True)
 rf.fit(X_train, y_train)
+importances = rf.feature_importances_
+impDF = pd.DataFrame({"features" : X_train.columns, "importance" : importances})
+impDF.head()
+impDF = impDF.sort(['importance'], ascending = False)
+impDF['Rank'] = range(1,1331)
+impDF[impDF['features'] == "V34"]
+impDF.describe()
+subspace = impDF[impDF['importance'] > 0.0005]['features']
+
+rf = RandomForestClassifier(max_features= 55, n_estimators= 1500, criterion= 'entropy', max_depth= 6, n_jobs = -1, verbose = True, oob_score = True)
+scores_rf = cross_val_score(rf, X_train[subspace], y_train, scoring = "f1", cv = skfold_train)
+print("RF CV Accuracy: %0.3f (+/- %0.3f)" % (scores_rf.mean(), scores_rf.std() * 2))
+rf.fit(X_train[subspace], y_train)
+
+param_grid = { 'n_estimators' : [500,1000,1500,2000,2500,3000],
+              'criterion' : ['gini', 'entropy'],
+                'max_features' : [15,20,25,30],
+                'max_depth' : [4,5,6]
+                }
+gs_cv = GridSearchCV(rf, param_grid, scoring = 'f1', n_jobs = -1, verbose = 2).fit(X_train[subspace], y_train)
+gs_cv.best_params_
+gs_cv
+rf = RandomForestClassifier(max_features= 30, n_estimators= 1500, criterion= 'gini', max_depth= 6, n_jobs = -1, verbose = True, oob_score = True)
+scores_rf = cross_val_score(rf, X_train[subspace], y_train, scoring = "f1", cv = skfold_train)
+print("RF CV Accuracy: %0.3f (+/- %0.3f)" % (scores_rf.mean(), scores_rf.std() * 2))
+rf.fit(X_train[subspace], y_train)
 
 X_eval_preds_rf = rf.predict_proba(X_eval)
 X_eval_preds_rf_np = np.asarray(X_eval_preds_rf)
@@ -97,13 +134,15 @@ evaluation['rfoutcome'] = X_eval_preds_rf_1
 evaluation['gbmoutcome'] = X_eval_preds_gbm_1
 evaluation['extoutcome'] = X_eval_preds_ext_1
 
+evaluation['outcome'] = X_eval_preds_rf_1
+
 evaluation.sid = evaluation.sid.astype(int)
 evaluation.sid.dtypes
-submission = pd.DataFrame({'sid':evaluation.sid, 'Exacebator':evaluation.gbmoutcome})
+submission = pd.DataFrame({'sid':evaluation.sid, 'Exacebator':evaluation.outcome})
 submission = submission.sort_index(axis=1, ascending = False)
 submission.head()
 ## Change submission name
-submission.to_csv("D:/CA/Exacerbation/ExacerbatorProject/CA-Exacerbator/results/GBM_1500_P.csv", index = False)
+submission.to_csv("D:/CA/Exacerbation/Python/results/RF_1500.csv", index = False)
 
 #train.to_csv("D:/CA/Exacerbation/ExacerbatorProject/CA-Exacerbator/data/train_new.csv", index = False)
 #evaluation.to_csv("D:/CA/Exacerbation/ExacerbatorProject/CA-Exacerbator/data/evaluation_new.csv", index = False)
